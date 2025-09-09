@@ -7,33 +7,42 @@ __pycache__/
 
 # Virtual environment
 venv/
+env/
 .env
+.venv/
 
 # IDEs
 .vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace
+.vs/
 
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Logs and temp files
 *.log
 *.sqlite3
 *.db
 *.bak
+logs/
 
 # FastAPI / backend temp files
 *.pycache/
 *.egg-info/
 *.pytest_cache/
+.coverage
+htmlcov/
 
-# Node / React (if frontend is inside same repo)
+# Node / React / Next.js
 node_modules/
 dist/
 build/
+.next/
+out/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -41,6 +50,21 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.vercel
+.turbo
 
-# Others
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Testing
+coverage/
+
+# Misc
 *.swp
+.cache/
+.temp/
+.eslintcache
+
+# Next.js build
+frontend/.next/
