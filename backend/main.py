@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import time
 
 # Import sensor functions
@@ -8,6 +9,15 @@ from sensors.hydro import moisture_sensor, piezometer
 from sensors.environmental import rain_sensor
 
 app = FastAPI()
+
+# Add CORS middleware to allow frontend to access the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For development; restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/sensor/sesmic")
 def get_vibration():
