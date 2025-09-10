@@ -1,71 +1,68 @@
+# backend/main.py
+
+import os
+import torch
+import uvicorn
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import time
+from pydantic import BaseModel
 
-# Import unified sensor manager
-import sensors
+# ----------------- IMPORT SENSOR MODULE -----------------
+from .sensors import sensors  # unified sensors.py
 
-app = FastAPI()
+# ----------------- IMPORT CNN MODEL -----------------
+from .ml_model.cnn_model import CNN1D
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ----------------- DEVICE SETUP -----------------
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# === Dummy ML Model (replace later) ===
-def predict_risk(features: dict) -> str:
-    """
-    Placeholder ML model for demo.
-    Takes sensor readings and returns a risk level.
-    """
-    vibration = max(
-        features["accelerometer"],
-        features["geophone"],
-        features["seismometer"]
-    )
-    crack = features["crack_sensor"]
-    moisture = features["moisture_sensor"]
-    rain = features["rain_sensor"]
+# ----------------- MODEL LOADING -----------------
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "ml_model", "best_cnn_model.pth")
+model = CNN1D()
+if os.path.exists(MODEL_PATH):
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    model.to(device)
+    model.eval()
+else:
+    print(f"⚠️ Model file not found at {MODEL_PATH}. Please check path.")
 
-    # Dummy thresholds (to be replaced with real model prediction)
-    if (vibration > 1.5 or crack > 3) and (rain > 50 or moisture > 60):
-        return "HIGH"
-    elif vibration > 0.5 or crack > 1:
-        return "MEDIUM"
-    else:
-        return "LOW"
+# ----------------- FASTAPI SETUP -----------------
+app = FastAPI(title="Rockfall Risk API")
 
-# === Endpoints ===
+# ----------------- REQUEST MODEL -----------------
+class SensorData(BaseModel):
+    accelerometer: float
+    geophone: float
+    seismometer: float
+    crack_sensor: float
+    inclinometer: float
+    extensometer: float
+    moisture_sensor: float
+    piezometer: float
 
-@app.get("/sensors")
-def get_all_sensors():
-    """
-    Get a combined frame of all sensor readings.
-    """
-    readings = sensors.get_all_readings()
-    readings["timestamp"] = time.time()
-    return readings
+# ----------------- ROUTES -----------------
+@app.get("/sensors/live")
+def get_live_sensors():
+    """Return live readings from all sensors."""
+    return sensors.get_all_readings()
 
-@app.post("/trigger/{event_type}")
-def trigger_event(event_type: str, duration: int = 20):
-    """
-    Manually trigger an event across all sensors.
-    event_type: "rockfall", "rainfall", "landslide"
-    """
-    sensors.trigger_all(event_type, duration_s=duration)
-    return {"status": "triggered", "event": event_type, "duration_s": duration}
 
-@app.get("/risk-level")
-def get_risk_level():
-    """
-    Get risk level from ML model (currently dummy).
-    """
-    readings = sensors.get_all_readings()
-    risk = predict_risk(readings)
-    readings["risk_level"] = risk
-    readings["timestamp"] = time.time()
-    return readings
+@app.post("/predict")
+def predict_risk(data: SensorData):
+    """Predict rockfall risk using CNN model."""
+    # Convert input to tensor with shape (1, T, C)
+    # Here T=1 (single timestep), C=8 (number of features)
+    features = [
+        data.accelerometer, data.geophone, data.seismometer,
+        data.crack_sensor, data.inclinometer, data.extensometer,
+        data.moisture_sensor, data.piezometer
+    ]
+    x = torch.tensor([features], dtype=torch.float32).unsqueeze(1).to(device)  # (1, 1, 8)
+    
+    with torch.no_grad():
+        pred = model(x).item()  # scalar
+    return {"risk_score": pred}
+
+# ----------------- RUN DEMO (OPTIONAL) -----------------
+if __name__ == "__main__":
+    print("Starting Rockfall Risk API on http://127.0.0.1:8000")
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)

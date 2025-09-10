@@ -1,19 +1,24 @@
+"""
+displacement.py -- Displacement sensors mock generator with proper state exposure
+"""
+
 import random
 import math
 import time
 
-# Global state for displacement sensors
+# ----------------- STATE -----------------
 disp_state = {
-    "t": 0,
-    "event": None  # crack widening / ground movement event
+    "t": 0,         # tick counter
+    "event": None   # active displacement event (crack widening / tilt / extensometer)
 }
 
+# ----------------- API -----------------
 def trigger_event(crack_increase=4, tilt_increase=1.5, extensometer_increase=1.5, duration_s=30):
     """
     Manually trigger a displacement event (e.g., crack widening, slope tilt, ground stretching).
     """
     disp_state["event"] = {
-        "remaining": duration_s * 10,  # simulate at 10Hz
+        "remaining": int(duration_s * 10),  # simulate at 10Hz
         "crack_increase": crack_increase,
         "tilt_increase": tilt_increase,
         "extensometer_increase": extensometer_increase
@@ -80,10 +85,16 @@ def get_readings():
         "label": label
     }
 
-# Test loop
+def is_event_active():
+    return bool(disp_state.get("event"))
+
+# ----------------- DEMO -----------------
 if __name__ == "__main__":
     print("Simulating displacement sensors (Ctrl+C to stop)...")
-    while True:
-        readings = get_readings()
-        print(readings)
-        time.sleep(0.1)  # 10Hz
+    try:
+        while True:
+            readings = get_readings()
+            print(readings)
+            time.sleep(0.1)  # 10Hz
+    except KeyboardInterrupt:
+        print("Stopped demo.")

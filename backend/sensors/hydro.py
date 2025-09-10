@@ -1,17 +1,22 @@
+"""
+hydro.py -- Hydro sensors mock generator with proper state exposure for sensors.py
+"""
+
 import random
 import math
 import time
 
-# Global state for hydro sensors
+# ----------------- STATE -----------------
 hydro_state = {
-    "t": 0,
-    "event": None  # active water infiltration / rising groundwater event
+    "t": 0,          # tick counter
+    "event": None    # active hydro event (e.g., rainfall infiltration)
 }
 
+# ----------------- API -----------------
 def trigger_event(moisture_increase=30, pressure_increase=25, duration_s=30):
     """Manually trigger a hydro event (e.g., heavy rainfall infiltration)."""
     hydro_state["event"] = {
-        "remaining": duration_s * 10,  # simulate at 10Hz
+        "remaining": int(duration_s * 10),  # simulate at 10Hz
         "moisture_increase": moisture_increase,
         "pressure_increase": pressure_increase
     }
@@ -31,7 +36,7 @@ def moisture_sensor():
 
     event_val = 0
     if hydro_state["event"]:
-        decay = math.exp(-0.01 * (hydro_state["event"]["remaining"]))
+        decay = math.exp(-0.01 * hydro_state["event"]["remaining"])
         event_val = hydro_state["event"]["moisture_increase"] * (1 - decay)
 
     noise = random.gauss(0, 1)
@@ -44,7 +49,7 @@ def piezometer():
 
     event_val = 0
     if hydro_state["event"]:
-        decay = math.exp(-0.015 * (hydro_state["event"]["remaining"]))
+        decay = math.exp(-0.015 * hydro_state["event"]["remaining"])
         event_val = hydro_state["event"]["pressure_increase"] * (1 - decay)
 
     noise = random.gauss(0, 0.5)
@@ -57,15 +62,21 @@ def get_readings():
     press = piezometer()
     label = 1 if hydro_state["event"] else 0
     return {
-        "moisture": moist,
+        "moisture_sensor": moist,
         "piezometer": press,
         "label": label
     }
 
-# Test loop
+def is_event_active():
+    return bool(hydro_state.get("event"))
+
+# ----------------- DEMO -----------------
 if __name__ == "__main__":
     print("Simulating hydro sensors (Ctrl+C to stop)...")
-    while True:
-        readings = get_readings()
-        print(readings)
-        time.sleep(0.1)  # 10Hz
+    try:
+        while True:
+            readings = get_readings()
+            print(readings)
+            time.sleep(0.1)  # 10Hz
+    except KeyboardInterrupt:
+        print("Stopped demo.")
