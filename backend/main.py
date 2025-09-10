@@ -2,80 +2,70 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import time
 
-# Import sensor functions
-from sensors.sesmic import accelerometer, geophone, seismometer
-from sensors.displacement import crack_sensor, inclinometer, extensometer
-from sensors.hydro import moisture_sensor, piezometer
-from sensors.environmental import rain_sensor
+# Import unified sensor manager
+import sensors
 
 app = FastAPI()
 
-# Add CORS middleware to allow frontend to access the API
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development; restrict in production
+    allow_origins=["*"],  # TODO: Restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/sensor/sesmic")
-def get_vibration():
-    return {
-        "accelerometer": accelerometer(),
-        "geophone": geophone(),
-        "seismometer": seismometer(),
-        "timestamp": time.time()
-    }
+# === Dummy ML Model (replace later) ===
+def predict_risk(features: dict) -> str:
+    """
+    Placeholder ML model for demo.
+    Takes sensor readings and returns a risk level.
+    """
+    vibration = max(
+        features["accelerometer"],
+        features["geophone"],
+        features["seismometer"]
+    )
+    crack = features["crack_sensor"]
+    moisture = features["moisture_sensor"]
+    rain = features["rain_sensor"]
 
-@app.get("/sensor/displacement")
-def get_displacement():
-    return {
-        "crack": crack_sensor(),
-        "inclinometer": inclinometer(),
-        "extensometer": extensometer(),
-        "timestamp": time.time()
-    }
+    # Dummy thresholds (to be replaced with real model prediction)
+    if (vibration > 1.5 or crack > 3) and (rain > 50 or moisture > 60):
+        return "HIGH"
+    elif vibration > 0.5 or crack > 1:
+        return "MEDIUM"
+    else:
+        return "LOW"
 
-@app.get("/sensor/hydro")
-def get_hydro():
-    return {
-        "moisture": moisture_sensor(),
-        "piezometer": piezometer(),
-        "timestamp": time.time()
-    }
+# === Endpoints ===
 
-@app.get("/sensor/environment")
-def get_environment():
-    return {
-        "rain": rain_sensor(),
-        "timestamp": time.time()
-    }
+@app.get("/sensors")
+def get_all_sensors():
+    """
+    Get a combined frame of all sensor readings.
+    """
+    readings = sensors.get_all_readings()
+    readings["timestamp"] = time.time()
+    return readings
+
+@app.post("/trigger/{event_type}")
+def trigger_event(event_type: str, duration: int = 20):
+    """
+    Manually trigger an event across all sensors.
+    event_type: "rockfall", "rainfall", "landslide"
+    """
+    sensors.trigger_all(event_type, duration_s=duration)
+    return {"status": "triggered", "event": event_type, "duration_s": duration}
 
 @app.get("/risk-level")
-def get_risk():
-    acc = accelerometer()
-    geo = geophone()
-    seis = seismometer()
-    crack = crack_sensor()
-    moisture = moisture_sensor()
-    rain = rain_sensor()
-
-    vibration_score = max(acc, geo, seis)
-    if (vibration_score>1.5 or crack>3) and rain>50:
-        risk = "HIGH"
-    elif vibration_score>0.5 or crack>1:
-        risk = "MEDIUM"
-    else:
-        risk = "LOW"
-
-    return {
-        "risk_level": risk,
-        "accelerometer": acc,
-        "geophone": geo,
-        "seismometer": seis,
-        "crack": crack,
-        "moisture": moisture,
-        "rain": rain,
-        "timestamp": time.time()
-    }
+def get_risk_level():
+    """
+    Get risk level from ML model (currently dummy).
+    """
+    readings = sensors.get_all_readings()
+    risk = predict_risk(readings)
+    readings["risk_level"] = risk
+    readings["timestamp"] = time.time()
+    return readings
