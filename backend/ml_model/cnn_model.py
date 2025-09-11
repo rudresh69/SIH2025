@@ -1,29 +1,85 @@
-# ml_model/cnn_model.py
+"""
+ml_model/cnn_model.py
+This file defines the 1D Convolutional Neural Network (CNN) architecture
+used for classifying the time-series sensor data.
+"""
 import torch
 import torch.nn as nn
 
-class CNN1D(nn.Module):
-    def __init__(self, in_channels=8):
-        super(CNN1D, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels, 64, kernel_size=7, padding=3)
-        self.bn1 = nn.BatchNorm1d(64)
-        self.conv2 = nn.Conv1d(64, 128, kernel_size=5, stride=2, padding=2)
-        self.bn2 = nn.BatchNorm1d(128)
-        self.conv3 = nn.Conv1d(128, 256, kernel_size=5, stride=2, padding=2)
-        self.bn3 = nn.BatchNorm1d(256)
-        self.global_pool = nn.AdaptiveAvgPool1d(1)
-        self.fc1 = nn.Linear(256, 256)
-        self.dropout = nn.Dropout(0.2)
-        self.out = nn.Linear(256, 1)
-        self.sigmoid = nn.Sigmoid()
+class CNNModel(nn.Module):
+    """
+    A flexible 1D Convolutional Neural Network for time-series classification.
+    It dynamically creates the fully-connected layer to adapt to different
+    input window sizes.
+    """
+    def __init__(self, num_features: int, num_classes: int = 2):
+        """
+        Args:
+            num_features (int): The number of input features (e.g., number of sensors).
+            num_classes (int): The number of output classes (e.g., 2 for Normal/Event).
+        """
+        super(CNNModel, self).__init__()
 
-    def forward(self, x):
+        # --- FIX ---
+        # Store num_classes as an attribute so it can be accessed in the forward pass.
+        self.num_classes = num_classes
+
+        # First convolutional block
+        self.conv1 = nn.Sequential(
+            nn.Conv1d(in_channels=num_features, out_channels=64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm1d(64),
+            nn.MaxPool1d(kernel_size=2, stride=2)
+        )
+
+        # Second convolutional block
+        self.conv2 = nn.Sequential(
+            nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm1d(128),
+            nn.MaxPool1d(kernel_size=2, stride=2)
+        )
+
+        self.flatten = nn.Flatten()
+
+        # The fully-connected layers will be defined dynamically in the forward pass
+        # to adapt to different input window sizes.
+        self.fc_layers = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for the model.
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, window_size, num_features).
+        Returns:
+            torch.Tensor: Output tensor of raw logits with shape (batch_size, num_classes).
+        """
+        # PyTorch Conv1D expects input as (batch_size, num_features, window_size)
         x = x.permute(0, 2, 1)
-        x = nn.ReLU()(self.bn1(self.conv1(x)))
-        x = nn.ReLU()(self.bn2(self.conv2(x)))
-        x = nn.ReLU()(self.bn3(self.conv3(x)))
-        x = self.global_pool(x).squeeze(-1)
-        x = nn.ReLU()(self.fc1(x))
-        x = self.dropout(x)
-        x = self.sigmoid(self.out(x))
+
+        # Pass through convolutional blocks
+        x = self.conv1(x)
+        x = self.conv2(x)
+
+        # Flatten the output for the fully-connected layers
+        x = self.flatten(x)
+
+        # On the first forward pass, dynamically create the FC layers
+        if self.fc_layers is None:
+            # Get the number of features after the conv layers have processed the input
+            num_fc_features = x.shape[1]
+    
+            self.fc_layers = nn.Sequential(
+                nn.Linear(num_fc_features, 128),
+                nn.ReLU(),
+                nn.Dropout(0.5),
+                # --- FIX ---
+                # Use the stored attribute here
+                nn.Linear(128, self.num_classes)
+            ).to(x.device) # IMPORTANT: Move the new layers to the correct GPU/CPU device
+
+        # Pass through the fully-connected layers
+        x = self.fc_layers(x)
+
         return x
+

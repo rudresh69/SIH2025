@@ -1,103 +1,155 @@
-# ml_model/train_cnn.py
+"""
+ml_model/train_cnn.py
+This script handles the complete training pipeline for the 1D CNN model.
+It loads the generated dataset, preprocesses it by scaling and creating
+time-series windows, splits it into training and testing sets, trains the model,
+and saves the best-performing version.
+"""
 
-import os
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset, random_split
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import pandas as pd
+import numpy as np
+import os
+import sys
 
-# Package-safe import
-from .cnn_model import CNN1D
-
-# -------------------------------
-# Paths
-# -------------------------------
+# Add the parent directory to the path to allow package-safe imports
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-X_PATH = os.path.join(BASE_DIR, "X_windows.npy")
-Y_PATH = os.path.join(BASE_DIR, "y_windows.npy")
+sys.path.append(BASE_DIR)
+
+# Assuming your model class is named CNNModel as in previous suggestions
+from ml_model.cnn_model import CNNModel
+
+# --- CONFIGURATION ---
+DATASET_PATH = os.path.join(BASE_DIR, "rockfall_dataset_refined.csv")
 BEST_MODEL_PATH = os.path.join(BASE_DIR, "ml_model", "best_cnn_model.pth")
+WINDOW_SIZE = 50      # The number of time steps in each sample (sequence length)
+BATCH_SIZE = 64
+EPOCHS = 15
+LEARNING_RATE = 0.001
+TEST_SPLIT_SIZE = 0.2
 
-# -------------------------------
-# Load dataset
-# -------------------------------
-X = np.load(X_PATH)  # shape: (N, window_length, 8)
-y = np.load(Y_PATH)  # shape: (N,)
+def create_windows(X: np.ndarray, y: np.ndarray, window_size: int):
+    """
+    Creates overlapping windows from time-series data.
+    """
+    X_windows, y_windows = [], []
+    # Ensure we don't go out of bounds
+    for i in range(len(X) - window_size):
+        X_windows.append(X[i:i + window_size])
+        # The label for a window is the label at the end of that window
+        y_windows.append(y[i + window_size - 1])
+    return np.array(X_windows), np.array(y_windows)
 
-X = torch.tensor(X, dtype=torch.float32)
-y = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
+def train_model():
+    """
+    Main function to orchestrate the model training pipeline.
+    """
+    print("Starting model training process...")
 
-# -------------------------------
-# Train/Val/Test split
-# -------------------------------
-dataset = TensorDataset(X, y)
-train_size = int(0.8 * len(dataset))
-val_size = int(0.1 * len(dataset))
-test_size = len(dataset) - train_size - val_size
-train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size])
+    # 1. Load Data
+    print(f"Loading data from {DATASET_PATH}...")
+    if not os.path.exists(DATASET_PATH):
+        print(f"❌ Error: Dataset not found at '{DATASET_PATH}'.")
+        print("Please run the 'dataset/rockfall_dataset_pipeline.py' script first.")
+        return
 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+    df = pd.read_csv(DATASET_PATH)
 
-# -------------------------------
-# Device & Model
-# -------------------------------
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = CNN1D(in_channels=X.shape[2]).to(device)
-criterion = nn.BCELoss()
-optimizer = optim.AdamW(model.parameters(), lr=0.001)
+    # Define the feature columns to be used for training
+    feature_columns = [
+        "accelerometer", "geophone", "seismometer", "moisture_sensor", "piezometer",
+        "crack_sensor", "inclinometer", "extensometer", "rain_sensor_mmhr",
+        "temperature_celsius", "humidity_percent"
+    ]
+    
+    # Verify that all required columns exist in the DataFrame
+    for col in feature_columns + ['label']:
+        if col not in df.columns:
+            print(f"❌ Error: Column '{col}' not found in the dataset!")
+            return
 
-# -------------------------------
-# Training loop
-# -------------------------------
-num_epochs = 20
-best_val_loss = float('inf')
+    X = df[feature_columns].values
+    y = df['label'].values
+    NUM_FEATURES = X.shape[1]
+    print(f"✅ Data loaded successfully with {NUM_FEATURES} features.")
 
-for epoch in range(num_epochs):
-    model.train()
-    train_loss = 0
-    for xb, yb in train_loader:
-        xb, yb = xb.to(device), yb.to(device)
-        optimizer.zero_grad()
-        out = model(xb)
-        loss = criterion(out, yb)
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item() * xb.size(0)
-    train_loss /= len(train_loader.dataset)
+    # 2. Preprocess Data
+    print("Scaling features...")
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
 
-    model.eval()
-    val_loss = 0
-    with torch.no_grad():
-        for xb, yb in val_loader:
-            xb, yb = xb.to(device), yb.to(device)
-            out = model(xb)
-            loss = criterion(out, yb)
-            val_loss += loss.item() * xb.size(0)
-    val_loss /= len(val_loader.dataset)
+    print(f"Creating time-series windows of size {WINDOW_SIZE}...")
+    X_windows, y_windows = create_windows(X_scaled, y, WINDOW_SIZE)
+    print(f"Created {len(X_windows)} windows.")
+    
+    # 3. Split Data
+    print(f"Splitting data into training and testing sets ({1-TEST_SPLIT_SIZE:.0%}/{TEST_SPLIT_SIZE:.0%})...")
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_windows, y_windows, test_size=TEST_SPLIT_SIZE, random_state=42, stratify=y_windows
+    )
 
-    print(f"Epoch {epoch+1}/{num_epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+    # 4. Create PyTorch DataLoaders
+    train_data = TensorDataset(torch.from_numpy(X_train).float(), torch.from_numpy(y_train).long())
+    test_data = TensorDataset(torch.from_numpy(X_test).float(), torch.from_numpy(y_test).long())
+    
+    train_loader = DataLoader(train_data, shuffle=True, batch_size=BATCH_SIZE)
+    test_loader = DataLoader(test_data, batch_size=BATCH_SIZE)
 
-    # Save best model
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        torch.save(model.state_dict(), BEST_MODEL_PATH)
-        print("✅ Saved Best Model")
+    # 5. Initialize Model, Loss, and Optimizer
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
-# -------------------------------
-# Test Evaluation
-# -------------------------------
-model.load_state_dict(torch.load(BEST_MODEL_PATH, map_location=device))
-model.eval()
-y_true, y_pred = [], []
-with torch.no_grad():
-    for xb, yb in test_loader:
-        xb = xb.to(device)
-        out = model(xb)
-        y_pred.extend(out.cpu().numpy())
-        y_true.extend(yb.numpy())
+    # Pass the number of features to the model constructor
+    model = CNNModel(num_features=NUM_FEATURES, num_classes=2).to(device)
+    
+    # Use CrossEntropyLoss for multi-class classification (it handles softmax internally)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-y_pred = np.array(y_pred) > 0.5
-accuracy = (y_pred.flatten() == np.array(y_true).flatten()).mean()
-print(f"✅ Test Accuracy: {accuracy*100:.2f}%")
+    # 6. Training Loop
+    print(f"Training for {EPOCHS} epochs...")
+    best_test_acc = 0.0
+    for epoch in range(EPOCHS):
+        model.train()
+        train_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+
+        # Evaluation on test set after each epoch
+        model.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for inputs, labels in test_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+        
+        test_accuracy = 100 * correct / total
+        print(f"Epoch {epoch+1}/{EPOCHS}, Loss: {train_loss/len(train_loader):.4f}, Test Accuracy: {test_accuracy:.2f}%")
+
+        # Save the model if it has the best accuracy so far
+        if test_accuracy > best_test_acc:
+            best_test_acc = test_accuracy
+            torch.save(model.state_dict(), BEST_MODEL_PATH)
+            print(f"✅ New best model saved with accuracy: {best_test_acc:.2f}%")
+
+    print("\n✅ Training complete.")
+    print(f"Best model saved to {BEST_MODEL_PATH} with accuracy {best_test_acc:.2f}%")
+
+if __name__ == '__main__':
+    train_model()

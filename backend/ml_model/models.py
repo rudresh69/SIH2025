@@ -1,33 +1,81 @@
-# ml_model/models.py
-
+"""
+ml_model/models.py
+This file defines the 1D Convolutional Neural Network (CNN) architecture.
+This version is updated to be consistent with the training pipeline.
+"""
 import torch
 import torch.nn as nn
 
 class RockfallCNN(nn.Module):
-    def __init__(self, in_channels=8):
+    """
+    A flexible 1D Convolutional Neural Network for time-series classification,
+    updated to work with the new training pipeline.
+    """
+    def __init__(self, num_features: int, num_classes: int = 2):
+        """
+        Args:
+            num_features (int): The number of input features (e.g., number of sensors).
+            num_classes (int): The number of output classes (e.g., 2 for Normal/Event).
+        """
         super(RockfallCNN, self).__init__()
-        self.net = nn.Sequential(
-            nn.Conv1d(in_channels, 64, kernel_size=7, padding=3),
+
+        # --- FIX ---
+        # Store num_classes as an attribute so it can be accessed in the forward pass.
+        self.num_classes = num_classes
+
+        # First convolutional block
+        self.conv1 = nn.Sequential(
+            nn.Conv1d(in_channels=num_features, out_channels=64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
             nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.Conv1d(64, 128, kernel_size=5, stride=2, padding=2),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Conv1d(128, 256, kernel_size=5, stride=2, padding=2),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool1d(1),
-        )
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, 1),
-            nn.Sigmoid()
+            nn.MaxPool1d(kernel_size=2, stride=2)
         )
 
-    def forward(self, x):
+        # Second convolutional block
+        self.conv2 = nn.Sequential(
+            nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm1d(128),
+            nn.MaxPool1d(kernel_size=2, stride=2)
+        )
+
+        self.flatten = nn.Flatten()
+
+        # The fully-connected layers will be defined dynamically.
+        self.fc_layers = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass for the model.
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, window_size, num_features).
+        Returns:
+            torch.Tensor: Output tensor of raw logits with shape (batch_size, num_classes).
+        """
+        # PyTorch Conv1D expects input as (batch_size, num_features, window_size)
         x = x.permute(0, 2, 1)
-        x = self.net(x)
-        return self.fc(x)
+
+        # Pass through convolutional blocks
+        x = self.conv1(x)
+        x = self.conv2(x)
+
+        # Flatten the output
+        x = self.flatten(x)
+
+        # On the first forward pass, dynamically create the FC layers
+        if self.fc_layers is None:
+            num_fc_features = x.shape[1]
+            self.fc_layers = nn.Sequential(
+                nn.Linear(num_fc_features, 128),
+                nn.ReLU(),
+                nn.Dropout(0.5),
+                # --- FIX ---
+                # Use the stored attribute here
+                nn.Linear(128, self.num_classes)
+            ).to(x.device) # Move the new layers to the correct device
+
+        # Pass through the fully-connected layers
+        x = self.fc_layers(x)
+
+        return x
+
