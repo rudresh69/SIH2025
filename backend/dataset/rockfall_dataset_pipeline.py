@@ -1,5 +1,5 @@
 """
-rockfall_dataset_pipeline.py
+dataset/rockfall_dataset_pipeline.py
 This script generates a comprehensive, labeled dataset for the rockfall prediction model.
 It runs the full sensor simulation, triggers random events, saves the
 complete output to a CSV file, and provides a live visualization of the process.
@@ -13,22 +13,26 @@ from tqdm import tqdm
 from collections import deque
 import matplotlib.pyplot as plt
 
-# -----------------------------
-# Paths & Setup
-# -----------------------------
-# Add the parent directory (BACKEND) to the Python path to import from 'sensors'
+# --- [CHANGE] PATH SETUP ---
+# This script is now nested. We need to find the root 'backend' directory
+# to import the 'sensors' module and save the dataset.
+# os.path.dirname(__file__) -> backend/dataset
+# os.path.dirname(...) -> backend/
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(BASE_DIR)
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
+
+# This import now works because the 'backend' directory is in the system path.
 from sensors import sensors
 
-# Define the output path for the generated dataset
+# The output path is constructed from the base directory, saving the CSV
+# to the root of the 'backend' folder.
 OUTPUT_CSV_FILE = os.path.join(BASE_DIR, "rockfall_dataset_refined.csv")
 
 
 # =========================
 # Configurations
 # =========================
-# Reduced sample count for a more manageable live demo. Increase for a larger dataset.
 TOTAL_SAMPLES = 10000
 EVENT_PROBABILITY = 0.005       # 0.5% chance per step to trigger a new random event.
 EVENT_TYPES = ["rockfall", "rainfall", "landslide"]
@@ -42,7 +46,7 @@ def generate_dataset_with_visualization():
     """
     print("Starting dataset generation process with live visualization...")
     print(f"This will create {TOTAL_SAMPLES} samples.")
-    print(f"Output file: {OUTPUT_CSV_FILE}")
+    print(f"Output file will be saved to: {OUTPUT_CSV_FILE}")
 
     headers = [
         "timestamp", "accelerometer", "geophone", "seismometer",
@@ -75,7 +79,6 @@ def generate_dataset_with_visualization():
         axs[i].legend(loc='upper left', fontsize=8)
     axs[-1].set_xlabel("Time Steps")
 
-    # Deques for efficient, fixed-size data storage for plotting
     time_queue = deque(maxlen=MAX_PLOT_POINTS)
     label_queue = deque(maxlen=MAX_PLOT_POINTS)
     sensor_queues = {name: deque(maxlen=MAX_PLOT_POINTS) for name in lines if name != 'label'}
@@ -97,29 +100,25 @@ def generate_dataset_with_visualization():
 
                 # --- Update Plot Data ---
                 time_queue.append(i)
-                # For plotting, scale the label to make it visible on the seismic chart
                 label_value = all_readings['label'] * 5 
-                label_queue.append(label_value if label_value > 0 else float('nan')) # Use NaN to create gaps
+                label_queue.append(label_value if label_value > 0 else float('nan'))
                 
                 for name, queue in sensor_queues.items():
                     queue.append(all_readings[name])
 
-                # Update the data for each line on the plot
                 for name, line in lines.items():
                     if name == 'label':
                         line.set_data(time_queue, label_queue)
                     else:
                         line.set_data(time_queue, sensor_queues[name])
 
-                # Automatically adjust axis limits
                 for ax in axs:
                     ax.relim()
                     ax.autoscale_view()
                 
-                # Redraw the canvas
                 fig.canvas.draw()
                 fig.canvas.flush_events()
-                time.sleep(0.001) # A tiny pause to allow the plot to render
+                time.sleep(0.001)
 
     except KeyboardInterrupt:
         print("\nDataset generation stopped by user.")
@@ -131,9 +130,8 @@ def generate_dataset_with_visualization():
         plt.ioff() # Turn off interactive mode
         print("\n✅ Dataset generation complete.")
         print(f"Data saved to {os.path.abspath(OUTPUT_CSV_FILE)}")
-        print("Closing plot window.")
-        plt.close(fig) # Close the plot window
+        print("Closing plot window...")
+        plt.close(fig)
 
 if __name__ == '__main__':
     generate_dataset_with_visualization()
-

@@ -1,5 +1,5 @@
 """
-ml_model/cnn_model.py
+ml_model/sensors/cnn_model.py
 This file defines the 1D Convolutional Neural Network (CNN) architecture
 used for classifying the time-series sensor data.
 """
@@ -20,8 +20,6 @@ class CNNModel(nn.Module):
         """
         super(CNNModel, self).__init__()
 
-        # --- FIX ---
-        # Store num_classes as an attribute so it can be accessed in the forward pass.
         self.num_classes = num_classes
 
         # First convolutional block
@@ -68,13 +66,11 @@ class CNNModel(nn.Module):
         if self.fc_layers is None:
             # Get the number of features after the conv layers have processed the input
             num_fc_features = x.shape[1]
-    
+
             self.fc_layers = nn.Sequential(
                 nn.Linear(num_fc_features, 128),
                 nn.ReLU(),
                 nn.Dropout(0.5),
-                # --- FIX ---
-                # Use the stored attribute here
                 nn.Linear(128, self.num_classes)
             ).to(x.device) # IMPORTANT: Move the new layers to the correct GPU/CPU device
 
@@ -82,4 +78,3 @@ class CNNModel(nn.Module):
         x = self.fc_layers(x)
 
         return x
-

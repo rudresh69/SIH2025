@@ -1,79 +1,100 @@
 """
 sensors.py
-Master sensor aggregator for the rockfall monitoring system.
-
-This module imports all individual sensor simulation modules (seismic, hydro,
-displacement, environmental) and provides a single, unified function to
-retrieve a complete, timestamped reading from all of them. It also includes
-a utility to trigger coordinated, realistic event scenarios.
+Master sensor aggregator for the rockfall monitoring system with
+early-warning phase support and gradual sensor trends.
 """
 
-import time
-from datetime import datetime
+import random
 from typing import Dict, Any
+from datetime import datetime
 
-# Import all individual sensor modules
+# Import individual sensor modules
 from . import seismic
 from . import hydro
 from . import displacement
 from . import environmental
 
-# ----------------- GLOBAL EVENT TRIGGER -----------------
-def trigger_all(event_type: str = "rockfall", duration_s: int = 30) -> None:
+# ----------------- GLOBAL STATE -----------------
+# Tracks current events and their phases
+sensor_state: Dict[str, Any] = {
+    "event_active": False,
+    "event_type": None,
+    "phase": None,               # 'early_warning' or 'main_event'
+    "ticks_remaining": 0,
+    "phase_transition_tick": 0
+}
+
+# ----------------- EVENT TRIGGER -----------------
+def trigger_all(event_type: str = "rockfall", duration_s: int = 60) -> None:
     """
-    Triggers a coordinated event across relevant sensor modules.
-
-    This function simulates realistic scenarios by activating different sensors
-    with appropriate parameters based on the event type.
-
-    Args:
-        event_type (str): The type of event to simulate.
-                          Options: "rockfall", "rainfall", "landslide".
-        duration_s (int): The approximate duration for the event's effects.
+    Triggers a coordinated event with early-warning and main event phases.
     """
-    print(f"\n--- TRIGGERING GLOBAL EVENT: {event_type.upper()} ---")
+    print(f"\n--- TRIGGERING GLOBAL EVENT: {event_type.upper()} ({duration_s}s) ---")
 
+    total_ticks = duration_s
+    early_phase_ticks = int(duration_s * 0.66)
+    main_phase_ticks = total_ticks - early_phase_ticks
+
+    # Initialize global sensor_state
+    sensor_state.update({
+        "event_active": True,
+        "event_type": event_type,
+        "phase": "early_warning",
+        "ticks_remaining": total_ticks,
+        "phase_transition_tick": main_phase_ticks  # when early warning ends
+    })
+
+    # Initialize event sensors depending on type
     if event_type == "rockfall":
-        # A typical rockfall: sharp seismic signal, moderate displacement.
-        # Hydro response is minimal unless preceded by rain.
-        seismic.trigger_event(magnitude=2.5, duration_s=duration_s, precursor=True)
-        displacement.trigger_event(total_displacement_mm=3.0, duration_s=duration_s * 2) # Displacement can be slower
-
+        seismic.trigger_event(magnitude=1.0, duration_s=early_phase_ticks, precursor=True)  # small tremor
+        displacement.trigger_event(total_displacement_mm=0.5, duration_s=early_phase_ticks)  # slow creep
     elif event_type == "rainfall":
-        # A heavy rainfall event: no seismic trigger, but high hydro response
-        # leading to potential for minor, slow displacement (creep).
-        hydro.trigger_event(duration_s=duration_s, intensity=25.0) # High intensity rain
-        # Simulate a small, slow creep due to saturation
-        displacement.trigger_event(total_displacement_mm=0.5, duration_s=duration_s * 5)
-
+        hydro.trigger_event(duration_s=duration_s, intensity=25.0)
+        displacement.trigger_event(total_displacement_mm=0.2, duration_s=duration_s)
     elif event_type == "landslide":
-        # A major landslide: strong, long seismic signal, major displacement,
-        # and often occurs in saturated ground conditions.
-        seismic.trigger_event(magnitude=3.5, duration_s=duration_s, precursor=True)
-        hydro.trigger_event(duration_s=duration_s, intensity=15.0) # Assume ground is already saturated
-        displacement.trigger_event(total_displacement_mm=10.0, duration_s=duration_s)
+        seismic.trigger_event(magnitude=1.5, duration_s=early_phase_ticks, precursor=True)
+        hydro.trigger_event(duration_s=duration_s, intensity=15.0)
+        displacement.trigger_event(total_displacement_mm=1.0, duration_s=early_phase_ticks)
 
-# ----------------- READ ALL SENSORS -----------------
+# ----------------- SENSOR READING -----------------
 def get_all_readings() -> Dict[str, Any]:
     """
-    Gathers readings from all sensor modules and combines them into a single dictionary.
-
-    It also computes a master 'label' for the data point. The label is 1 (event)
-    if any of the primary risk sensors (seismic, hydro, displacement) indicate an
-    active event. The environmental data is treated as contextual information.
-
-    Returns:
-        Dict[str, Any]: A flat dictionary containing all sensor readings, a timestamp,
-                        and a master event label.
+    Gather readings from all sensors, apply event phase adjustments,
+    and update global event state.
     """
-    # 1. Get readings from each sensor module
+    # ----------------- UPDATE EVENT STATE -----------------
+    if sensor_state["event_active"]:
+        sensor_state["ticks_remaining"] -= 1
+
+        # Check for phase transition
+        if sensor_state["phase"] == "early_warning" and sensor_state["ticks_remaining"] <= sensor_state["phase_transition_tick"]:
+            sensor_state["phase"] = "main_event"
+            # Update sensors for main event
+            if sensor_state["event_type"] == "rockfall":
+                seismic.trigger_event(magnitude=3.0, duration_s=sensor_state["ticks_remaining"], precursor=False)
+                displacement.trigger_event(total_displacement_mm=2.5, duration_s=sensor_state["ticks_remaining"])
+            elif sensor_state["event_type"] == "landslide":
+                seismic.trigger_event(magnitude=3.5, duration_s=sensor_state["ticks_remaining"], precursor=False)
+                displacement.trigger_event(total_displacement_mm=10.0, duration_s=sensor_state["ticks_remaining"])
+
+        # End event
+        if sensor_state["ticks_remaining"] <= 0:
+            sensor_state.update({
+                "event_active": False,
+                "event_type": None,
+                "phase": None,
+                "ticks_remaining": 0,
+                "phase_transition_tick": 0
+            })
+
+    # ----------------- GET SENSOR READINGS -----------------
     seismic_data = seismic.get_readings()
     hydro_data = hydro.get_readings()
     displacement_data = displacement.get_readings()
     env_data = environmental.get_readings()
 
-    # 2. Determine the master label
-    # An event is active if seismic, hydro, OR displacement sensors report it.
+    # ----------------- MASTER LABEL -----------------
+    # Event active if any primary sensor shows event signal
     is_event_active = any([
         seismic_data.get("label", 0),
         hydro_data.get("label", 0),
@@ -81,26 +102,25 @@ def get_all_readings() -> Dict[str, Any]:
     ])
     master_label = 1 if is_event_active else 0
 
-    # 3. Combine all data into a single, flat dictionary.
-    # The order of features here will be the order in your CSV and for your model.
+    # ----------------- COMBINE INTO SINGLE DICT -----------------
     all_data = {
         "timestamp": datetime.utcnow().isoformat(),
 
-        # Seismic Features
+        # Seismic
         "accelerometer": seismic_data["accelerometer"],
         "geophone": seismic_data["geophone"],
         "seismometer": seismic_data["seismometer"],
 
-        # Hydrological Features
+        # Hydrological
         "moisture_sensor": hydro_data["moisture_sensor"],
         "piezometer": hydro_data["piezometer"],
 
-        # Displacement Features
+        # Displacement
         "crack_sensor": displacement_data["crack_sensor"],
         "inclinometer": displacement_data["inclinometer"],
         "extensometer": displacement_data["extensometer"],
 
-        # Environmental Features
+        # Environmental
         "rain_sensor_mmhr": env_data["rain_sensor_mmhr"],
         "temperature_celsius": env_data["temperature_celsius"],
         "humidity_percent": env_data["humidity_percent"],
@@ -113,35 +133,12 @@ def get_all_readings() -> Dict[str, Any]:
 
 # ----------------- DEMO -----------------
 if __name__ == "__main__":
-    print("Starting combined sensor feed demo. Press Ctrl+C to stop.")
-    # Use the sampling interval from your fastest sensor for the demo loop
-    sampling_interval = seismic.seismic_state['sampling_interval_s']
-
-    print("\n--- Phase 1: Normal Conditions ---")
-    time.sleep(1)
-    for _ in range(50):
-        readings = get_all_readings()
-        print(f"Time: {readings['timestamp'][11:23]}, "
-              f"Geophone: {readings['geophone']:.3f}, "
-              f"Moisture: {readings['moisture_sensor']:.2f}%, "
-              f"Rain: {readings['rain_sensor_mmhr']:.1f} mm/hr, "
-              f"Label: {readings['label']}")
-        time.sleep(sampling_interval)
-
-    # Trigger a coordinated event
-    trigger_all("rockfall", duration_s=15)
-    print("\n--- Phase 2: Rockfall Event Active ---")
-
-    try:
-        # Run for a while to observe the event and its aftermath
-        for _ in range(300):
-            readings = get_all_readings()
-            event_marker = " *EVENT ACTIVE*" if readings['label'] == 1 else ""
-            print(f"Time: {readings['timestamp'][11:23]}, "
-                  f"Geophone: {readings['geophone']:.3f}, "
-                  f"Moisture: {readings['moisture_sensor']:.2f}%, "
-                  f"Rain: {readings['rain_sensor_mmhr']:.1f} mm/hr, "
-                  f"Label: {readings['label']}{event_marker}")
-            time.sleep(sampling_interval)
-    except KeyboardInterrupt:
-        print("\nSimulation stopped.")
+    import time
+    print("Starting enhanced sensors demo (early-warning + main event)...")
+    for i in range(200):
+        if i == 50:
+            trigger_all("rockfall", duration_s=60)
+        data = get_all_readings()
+        print(f"{i:03d} | Acc:{data['accelerometer']:.2f}, Geo:{data['geophone']:.2f}, "
+              f"Moisture:{data['moisture_sensor']:.2f}, Label:{data['label']}, Phase:{sensor_state['phase']}")
+        time.sleep(0.05)
