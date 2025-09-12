@@ -1,5 +1,5 @@
 {
-  "name": "rockfall-dashboard",
+  "name": "trinetra-dashboard",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -48,6 +48,7 @@
   "devDependencies": {
     "@types/lodash.throttle": "^4.1.9",
     "@types/plotly.js": "^3.0.4",
-    "@types/recharts": "^1.8.29"
+    "@types/recharts": "^1.8.29",
+    "react-icons": "^5.5.0"
   }
 }

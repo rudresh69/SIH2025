@@ -31,39 +31,39 @@ export class WebSocketService {
   }
 
   private connect() {
-  try {
-    this.socket = new WebSocket(this.url);
-  } catch (err) {
-    console.error("WebSocket connection failed immediately", err);
-    this.scheduleReconnect();
-    return;
-  }
-
-  this.socket.onopen = () => {
-    this.reconnectAttempts = 0;
-    this.connectionCallbacks.forEach(cb => cb(true));
-    console.log(`⚡ WebSocket connected to ${this.url}`);
-  };
-
-  this.socket.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data);
-      this.messageCallbacks.forEach(cb => cb(data));
+      this.socket = new WebSocket(this.url);
     } catch (err) {
-      console.error("❌ WebSocket message parse error", err);
+      console.error("WebSocket connection failed immediately", err);
+      this.scheduleReconnect();
+      return;
     }
-  };
 
-  this.socket.onerror = () => {
-    // Don't spam console; handled in onclose
-  };
+    this.socket.onopen = () => {
+      this.reconnectAttempts = 0;
+      this.connectionCallbacks.forEach(cb => cb(true));
+      console.log(`⚡ WebSocket connected to ${this.url}`);
+    };
 
-  this.socket.onclose = () => {
-    this.connectionCallbacks.forEach(cb => cb(false));
-    console.warn(`⚠️ WebSocket disconnected. Reconnecting... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
-    this.scheduleReconnect();
-  };
-}
+    this.socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        this.messageCallbacks.forEach(cb => cb(data));
+      } catch (err) {
+        console.error("❌ WebSocket message parse error", err);
+      }
+    };
+
+    this.socket.onerror = () => {
+      // Don't spam console; handled in onclose
+    };
+
+    this.socket.onclose = () => {
+      this.connectionCallbacks.forEach(cb => cb(false));
+      console.warn(`⚠️ WebSocket disconnected. Reconnecting... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+      this.scheduleReconnect();
+    };
+  }
 
 private scheduleReconnect() {
   this.reconnectAttempts++;

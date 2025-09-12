@@ -94,23 +94,6 @@ const SensorGraphs: React.FC = () => {
         ))}
       </div>
 
-      {/* Status Bar */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-        <div className="flex flex-wrap justify-between items-center text-sm text-gray-600 gap-2">
-          <div className="flex items-center gap-4">
-            <span>📊 {timeData.length}/{MAX_PLOT_POINTS}</span>
-            <span>|</span>
-            <span><div className={`inline-block h-2 w-2 rounded-full mr-1 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />{isConnected ? 'LIVE' : 'OFFLINE'}</span>
-          </div>
-          <div className="font-mono text-xs">
-            {currentEvent ? 'EVENT MODE' : 'NORMAL MODE'}
-          </div>
-          <div className="flex items-center gap-4">
-            {data && (<span>🕐 {new Date().toLocaleTimeString()}</span>)}
-          </div>
-        </div>
-      </div>
-
       {/* Sensor Groups Info with Sparklines */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {Object.entries(SENSOR_GROUPS).map(([groupName, config]) => {

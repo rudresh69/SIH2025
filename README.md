@@ -1,6 +1,6 @@
-# Rockfall - Mine Safety Monitoring System
+# TRINETRA - Geological Event Monitoring System
 
-A comprehensive mine safety monitoring system that provides real-time sensor data visualization and risk assessment for rockfall prevention.
+A comprehensive geological event monitoring system that provides real-time sensor data visualization and risk assessment for rockfall, rainfall, and landslide prevention.
 
 ## Project Structure
 
@@ -116,11 +116,12 @@ Once the backend is running, you can access the auto-generated API documentation
 
 ## Project Purpose
 
-This system is designed to help mining operations prevent rockfall incidents by:
+This system is designed to help geological monitoring operations prevent hazardous events by:
 
-1. Continuously monitoring critical parameters
-2. Providing early warning of potential hazards
+1. Continuously monitoring critical parameters across multiple sensor types
+2. Providing early warning of potential geological hazards (rockfall, rainfall, landslides)
 3. Visualizing trends to identify developing issues
 4. Offering risk assessment based on multiple sensor inputs
+5. Supporting three distinct event types with specialized monitoring protocols
 
-The combination of various sensor types allows for comprehensive monitoring of conditions that may lead to rockfall events, enabling proactive safety measures.
+The combination of various sensor types allows for comprehensive monitoring of conditions that may lead to geological events, enabling proactive safety measures and timely evacuation protocols.

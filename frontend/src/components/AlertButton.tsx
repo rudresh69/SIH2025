@@ -7,9 +7,9 @@ interface AlertButtonProps {
 }
 
 const eventTypes = [
-  { name: 'Rockfall', type: 'rockfall', icon: '🪨' },
-  { name: 'Rainfall', type: 'rainfall', icon: '🌧️' },
-  { name: 'Landslide', type: 'landslide', icon: '⛰️' },
+  { type: 'rockfall', label: 'Rockfall', icon: '🪨' },
+  { type: 'rainfall', label: 'Heavy Rainfall', icon: '🌧️' },
+  { type: 'landslide', label: 'Landslide', icon: '🏔️' },
 ];
 
 const AlertButton: React.FC<AlertButtonProps> = ({ onTriggerAlert, isAlertActive }) => {
@@ -34,7 +34,7 @@ const AlertButton: React.FC<AlertButtonProps> = ({ onTriggerAlert, isAlertActive
                 className="w-full px-4 py-2 rounded-lg text-left font-semibold text-gray-700 hover:bg-gray-100 transition-colors flex items-center"
               >
                 <span className="mr-3 text-xl">{event.icon}</span>
-                <span>{event.name}</span>
+                <span>{event.label}</span>
               </button>
             ))}
           </div>

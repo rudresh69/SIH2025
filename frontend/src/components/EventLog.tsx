@@ -6,7 +6,9 @@ type WsData = {
   prediction?: string | null;
   label?: number;
   weather_forecast?: any[];
-  event_phase?: 'none' | 'early_warning' | 'main_event';
+  event_phase?: 'none' | 'normal' | 'warning' | 'danger' | 'main_event';
+  event_active?: boolean;
+  event_type?: string;
 };
 
 type LogEntry = { timestamp: string; message: string; level: 'info' | 'warning' | 'danger' };
@@ -36,7 +38,7 @@ const EventLog: React.FC<{ triggerAlert?: boolean }> = ({ triggerAlert = false }
   useEffect(() => {
     push('System initialized and connected.', 'info');
     const interval = setInterval(() => {
-      push('Heartbeat — Awaiting sensor data...', 'info');
+      push('Receiving normal readings - All systems operational', 'info');
     }, 15000);
     return () => clearInterval(interval);
   }, []);
@@ -46,17 +48,24 @@ const EventLog: React.FC<{ triggerAlert?: boolean }> = ({ triggerAlert = false }
     const ts = formatTS(data.timestamp);
 
     const currentPhase = data.event_phase ?? 'none';
+    const eventType = data.event_type ?? 'event';
     if (currentPhase !== lastEventPhaseRef.current) {
       switch (currentPhase) {
-        case 'early_warning':
-          push(`[${ts}] EVENT START: Early warning phase initiated.`, 'warning');
+        case 'normal':
+          push(`[${ts}] EVENT START: Receiving normal readings - All systems operational`, 'info');
+          break;
+        case 'warning':
+          push(`[${ts}] WARNING: Receiving unusual readings - Potential ${eventType} detected`, 'warning');
+          break;
+        case 'danger':
+          push(`[${ts}] DANGER: Evacuate immediately - ${eventType.charAt(0).toUpperCase() + eventType.slice(1)} imminent! Audio alert activated!`, 'danger');
           break;
         case 'main_event':
-          push(`[${ts}] EVENT TRANSITION: Main event phase started.`, 'danger');
+          push(`[${ts}] EMERGENCY: ${eventType.charAt(0).toUpperCase() + eventType.slice(1)} in progress - Take cover!`, 'danger');
           break;
         case 'none':
           if (lastEventPhaseRef.current !== 'none') {
-            push(`[${ts}] EVENT END: System returning to normal state.`, 'info');
+            push(`[${ts}] EVENT END: System returning to normal state - Receiving normal readings`, 'info');
           }
           break;
       }

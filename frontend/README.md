@@ -1,7 +1,7 @@
-# Rockfall Monitoring Dashboard
+# TRINETRA - Geological Event Monitoring Dashboard
 
 ## Overview
-This dashboard is designed for monitoring rockfall events in open-pit mines. It displays live sensor data, weather conditions, image feed, ML model predictions, and a final risk indicator for rockfall events.
+This dashboard is designed for monitoring geological events including rockfall, rainfall, and landslide events. It displays live sensor data, weather conditions, image feed, ML model predictions, and a final risk indicator for geological events.
 
 ## Features
 - Real-time sensor data visualization (seismic, displacement, hydro, environmental)
@@ -18,7 +18,7 @@ This dashboard is designed for monitoring rockfall events in open-pit mines. It 
 - Recharts for data visualization
 
 ## Smart India Hackathon Project
-This dashboard was created as part of the Smart India Hackathon to demonstrate a rockfall monitoring system for improving safety in open-pit mines.
+This dashboard was created as part of the Smart India Hackathon to demonstrate TRINETRA - a comprehensive geological event monitoring system for improving safety in mining and geological operations.
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
