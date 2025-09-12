@@ -3,10 +3,10 @@ import torch
 import numpy as np
 import joblib
 
-# --- [CHANGE 1] IMPORT THE SHARED CONFIG AND MODEL ---
+# --- [CHANGE 1] IMPORT THE SHARED CONFIG AND CORRECT MODEL CLASS ---
 # Import from the training script to ensure all parameters are identical.
 from .train_weather import CONFIG 
-from .lstm_weather import LSTMForecaster
+from .lstm_weather import LSTMForecaster # <-- FIX: Use correct class name
 
 # --- [CHANGE 2] USE THE CENTRALIZED CONFIGURATION ---
 # All paths and parameters are now sourced from the single CONFIG dictionary.
@@ -14,8 +14,10 @@ BASE_DIR = CONFIG["model_dir"]
 MODEL_PATH = os.path.join(BASE_DIR, CONFIG["model_name"])
 SCALER_PATH = os.path.join(BASE_DIR, CONFIG["scaler_name"])
 WEATHER_FEATURES = CONFIG["features"]
+# Also get window size and forecast steps from the single source of truth
 WEATHER_WINDOW_SIZE = CONFIG["hyperparameters"]["window_size"]
 FORECAST_STEPS = CONFIG["hyperparameters"]["forecast_horizon"]
+
 
 class WeatherForecaster:
     """
@@ -37,7 +39,7 @@ class WeatherForecaster:
 
                 # --- [FIX] INITIALIZE MODEL WITH FULL PARAMETERS FROM CONFIG ---
                 hp = CONFIG["hyperparameters"]
-                self.model = LSTMForecaster(
+                self.model = LSTMForecaster(  # <-- FIX: Use correct class name
                     input_size=len(WEATHER_FEATURES),
                     hidden_size=hp["lstm_hidden_size"],
                     num_layers=hp["lstm_num_layers"],

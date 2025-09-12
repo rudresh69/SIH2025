@@ -1,0 +1,32 @@
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  margin: 0;
+  padding: 20px;
+  transition: background-color 0.5s;
+}
+
+.alert-box {
+  padding: 20px;
+  border-radius: 12px;
+  margin: 20px auto;
+  width: 300px;
+  font-size: 18px;
+  font-weight: bold;
+  color: white;
+}
+
+.safe { background-color: green; }
+.warning { background-color: orange; }
+.emergency { background-color: red; }
+
+.details-box {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  width: 300px;
+  margin-left: auto;
+  margin-right: auto;
+  background: #f9f9f9;
+}

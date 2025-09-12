@@ -1,92 +1,70 @@
+// frontend/src/components/ModelPredictions.tsx
 import React from 'react';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface ModelPredictionsProps {
   triggerAlert?: boolean;
 }
 
-type WeatherRiskType = 'Low' | 'Medium' | 'High';
-type ImageRiskType = 'Normal' | 'Warning' | 'Rockfall';
+// --- CHANGE: Define a type for expected WebSocket data
+interface WsData {
+  prediction?: 'Event Detected' | 'Normal';
+  confidence?: number;
+  weather_forecast?: [number, number, number][]; // [rain, temp, hum]
+}
 
 const ModelPredictions: React.FC<ModelPredictionsProps> = ({ triggerAlert = false }) => {
-  // Mock data for demonstration
-  const sensorRisk = triggerAlert ? 85 : 25;
-  const weatherRisk: WeatherRiskType = triggerAlert ? 'High' : 'Low';
-  const imageRisk: ImageRiskType = triggerAlert ? 'Rockfall' : 'Normal';
+  const { data } = useWebSocket<WsData>();
 
-  const getSensorRiskColor = (risk: number) => {
+  // --- CHANGE: Derive values from live data or the manual alert trigger
+  const isEventPredicted = data?.prediction === 'Event Detected';
+  const sensorRisk = triggerAlert ? 95 : (isEventPredicted ? (data?.confidence ?? 0) * 100 : (data?.confidence ?? 0) * 50);
+
+  const avgRainfall = data?.weather_forecast?.[0]?.[0] ?? 0; // Rain from first forecast step
+  let weatherRisk: 'Low' | 'Medium' | 'High' = 'Low';
+  if (triggerAlert || avgRainfall > 10) weatherRisk = 'High';
+  else if (avgRainfall > 2) weatherRisk = 'Medium';
+  
+  const imageRisk: 'Normal' | 'Warning' | 'Rockfall' = triggerAlert || sensorRisk > 80 ? 'Rockfall' : sensorRisk > 50 ? 'Warning' : 'Normal';
+
+  const getRiskColor = (risk: number | string) => {
+    if (typeof risk === 'string') {
+        if (risk === 'Low' || risk === 'Normal') return 'text-green-500';
+        if (risk === 'Medium' || risk === 'Warning') return 'text-orange-500';
+        return 'text-red-500';
+    }
     if (risk < 30) return 'text-green-500';
     if (risk < 70) return 'text-orange-500';
     return 'text-red-500';
   };
 
-  const getWeatherRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'Low':
-        return 'text-green-500';
-      case 'Medium':
-        return 'text-orange-500';
-      case 'High':
-        return 'text-red-500';
-      default:
-        return 'text-gray-500';
-    }
-  };
-
-  const getImageRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'Normal':
-        return 'text-green-500';
-      case 'Warning':
-        return 'text-orange-500';
-      case 'Rockfall':
-        return 'text-red-500';
-      default:
-        return 'text-gray-500';
-    }
-  };
-
   return (
-    <div className="grid grid-cols-3 gap-4 p-4">
-      <div className="bg-white p-4 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4">Sensor Risk (1D-CNN)</h3>
-        <div className="flex flex-col items-center">
-          <div className="w-32 h-32 rounded-full border-8 border-gray-200 flex items-center justify-center mb-4">
-            <span className={`text-4xl font-bold ${getSensorRiskColor(sensorRisk)}`}>{sensorRisk}%</span>
-          </div>
-          <span className={`font-semibold ${getSensorRiskColor(sensorRisk)}`}>
-            {sensorRisk < 30 ? 'Normal' : sensorRisk < 70 ? 'Warning' : 'Rockfall'}
-          </span>
-        </div>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg mb-4">
+      {/* Sensor Risk */}
+      <div className="bg-white p-4 rounded-lg shadow text-center">
+        <h3 className="text-lg font-semibold mb-2 text-gray-700">Sensor Risk (AI Model)</h3>
+        <p className={`text-5xl font-bold ${getRiskColor(sensorRisk)}`}>{sensorRisk.toFixed(0)}%</p>
+        <p className={`font-semibold mt-2 ${getRiskColor(sensorRisk)}`}>
+            {sensorRisk < 30 ? 'Normal' : sensorRisk < 70 ? 'Warning' : 'High Risk'}
+        </p>
       </div>
 
-      <div className="bg-white p-4 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4">Weather Risk</h3>
-        <div className="flex flex-col items-center">
-          <div className="w-32 h-32 rounded-full border-8 border-gray-200 flex items-center justify-center mb-4">
-            <span className={`text-4xl font-bold ${getWeatherRiskColor(weatherRisk)}`}>{weatherRisk}</span>
-          </div>
-          <span className={`font-semibold ${getWeatherRiskColor(weatherRisk)}`}>
-            {weatherRisk === 'Low' ? 'Safe Conditions' : 
-             (weatherRisk as string) === 'Medium' ? 'Caution Advised' : 
-             (weatherRisk as string) === 'High' ? 'Dangerous Conditions' : 
-             'Unknown'}
-          </span>
-        </div>
+      {/* Weather Risk */}
+      <div className="bg-white p-4 rounded-lg shadow text-center">
+        <h3 className="text-lg font-semibold mb-2 text-gray-700">Weather Risk</h3>
+        <p className={`text-5xl font-bold ${getRiskColor(weatherRisk)}`}>{weatherRisk}</p>
+        <p className={`font-semibold mt-2 ${getRiskColor(weatherRisk)}`}>
+            {weatherRisk === 'Low' ? 'Safe Conditions' : weatherRisk === 'Medium' ? 'Caution Advised' : 'Dangerous Conditions'}
+        </p>
       </div>
 
-      <div className="bg-white p-4 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4">Image Risk (Camera Model)</h3>
-        <div className="flex flex-col items-center">
-          <div className="w-32 h-32 rounded-full border-8 border-gray-200 flex items-center justify-center mb-4">
-            <span className={`text-4xl font-bold ${getImageRiskColor(imageRisk)}`}>{imageRisk}</span>
-          </div>
-          <span className={`font-semibold ${getImageRiskColor(imageRisk)}`}>
-            {imageRisk === 'Normal' ? 'No Issues Detected' : 
-             (imageRisk as string) === 'Warning' ? 'Possible Issues' : 
-             (imageRisk as string) === 'Rockfall' ? 'Critical Issues' : 
-             'Unknown'}
-          </span>
-        </div>
+      {/* Image Risk */}
+      <div className="bg-white p-4 rounded-lg shadow text-center">
+        <h3 className="text-lg font-semibold mb-2 text-gray-700">Image Risk (Camera)</h3>
+        <p className={`text-5xl font-bold ${getRiskColor(imageRisk)}`}>{imageRisk}</p>
+        <p className={`font-semibold mt-2 ${getRiskColor(imageRisk)}`}>
+            {imageRisk === 'Normal' ? 'No Issues Detected' : imageRisk === 'Warning' ? 'Possible Issues' : 'Critical Issues'}
+        </p>
       </div>
     </div>
   );

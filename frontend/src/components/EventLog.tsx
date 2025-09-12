@@ -1,95 +1,111 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useWebSocket } from '../hooks/useWebSocket';
 
-interface EventLogProps {
-  triggerAlert?: boolean;
-}
-
-interface LogEntry {
+type WsData = {
   timestamp: string;
-  message: string;
-  level: 'info' | 'warning' | 'danger';
-}
+  prediction?: string | null;
+  label?: number;
+  weather_forecast?: any[];
+  event_phase?: 'none' | 'early_warning' | 'main_event';
+};
 
-const EventLog: React.FC<EventLogProps> = ({ triggerAlert = false }) => {
+type LogEntry = { timestamp: string; message: string; level: 'info' | 'warning' | 'danger' };
+
+const formatTS = (iso?: string) => {
+  try {
+    if (!iso) return new Date().toLocaleTimeString();
+    return iso.slice(11, 19);
+  } catch {
+    return new Date().toLocaleTimeString();
+  }
+};
+
+const EventLog: React.FC<{ triggerAlert?: boolean }> = ({ triggerAlert = false }) => {
+  const { data } = useWebSocket<WsData>();
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  
+  const lastPredictionRef = useRef<string | null>(null);
+  const lastEventPhaseRef = useRef<string>('none');
+  // --- CHANGE: Add a ref to track the rain alert status ---
+  const isHeavyRainAlertActiveRef = useRef<boolean>(false);
 
-  // Generate timestamp in format [HH:MM:SS]
-  const getTimestamp = () => {
-    const now = new Date();
-    return `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`;
-  };
-
-  // Add a new log entry
-  const addLogEntry = (message: string, level: 'info' | 'warning' | 'danger') => {
-    setLogs(prev => [{ timestamp: getTimestamp(), message, level }, ...prev].slice(0, 100));
+  const push = (message: string, level: LogEntry['level']) => {
+    setLogs(prev => [{ timestamp: new Date().toISOString(), message, level }, ...prev].slice(0, 200));
   };
 
   useEffect(() => {
-    // Initial log entry
-    addLogEntry('System initialized', 'info');
-    
-    // Add periodic log entries for demonstration
+    push('System initialized and connected.', 'info');
     const interval = setInterval(() => {
-      if (!triggerAlert) {
-        const randomEntries = [
-          { message: 'Sensors stable', level: 'info' as const },
-          { message: 'Weather conditions normal', level: 'info' as const },
-          { message: 'Image analysis completed', level: 'info' as const },
-          { message: 'Minor vibration detected', level: 'info' as const },
-          { message: 'Slight increase in humidity', level: 'info' as const }
-        ];
-        
-        const randomEntry = randomEntries[Math.floor(Math.random() * randomEntries.length)];
-        addLogEntry(`${randomEntry.message} – SAFE`, randomEntry.level);
-      }
-    }, 3000);
-
+      push('Heartbeat — Awaiting sensor data...', 'info');
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
+    if (!data) return;
+    const ts = formatTS(data.timestamp);
+
+    const currentPhase = data.event_phase ?? 'none';
+    if (currentPhase !== lastEventPhaseRef.current) {
+      switch (currentPhase) {
+        case 'early_warning':
+          push(`[${ts}] EVENT START: Early warning phase initiated.`, 'warning');
+          break;
+        case 'main_event':
+          push(`[${ts}] EVENT TRANSITION: Main event phase started.`, 'danger');
+          break;
+        case 'none':
+          if (lastEventPhaseRef.current !== 'none') {
+            push(`[${ts}] EVENT END: System returning to normal state.`, 'info');
+          }
+          break;
+      }
+      lastEventPhaseRef.current = currentPhase;
+    }
+
+    const pred = data.prediction ?? null;
+    if (pred && pred !== lastPredictionRef.current) {
+      const lvl = pred === 'Event Detected' ? 'danger' : 'info';
+      push(`[${ts}] Model Prediction updated to: ${pred}`, lvl);
+      lastPredictionRef.current = pred;
+    }
+
+    // --- CHANGE: Updated weather logic to only log on state change ---
+    if (Array.isArray(data.weather_forecast) && data.weather_forecast.length > 0) {
+      const rain = Number(data.weather_forecast[0]?.[0] ?? 0);
+      const isHeavyRainNow = rain > 10;
+
+      // Log only when heavy rain *starts*
+      if (isHeavyRainNow && !isHeavyRainAlertActiveRef.current) {
+        push(`[${ts}] Weather Alert: Heavy rain forecasted (${rain.toFixed(1)} mm/hr)`, 'warning');
+        isHeavyRainAlertActiveRef.current = true;
+      } 
+      // Log only when heavy rain *stops*
+      else if (!isHeavyRainNow && isHeavyRainAlertActiveRef.current) {
+        push(`[${ts}] Weather Update: Rainfall has subsided.`, 'info');
+        isHeavyRainAlertActiveRef.current = false;
+      }
+    }
+  }, [data]);
+
+  useEffect(() => {
     if (triggerAlert) {
-      // Add alert log entries
-      addLogEntry('Significant vibration detected – WARNING', 'warning');
-      
-      setTimeout(() => {
-        addLogEntry('Sensor values exceeding thresholds – WARNING', 'warning');
-      }, 1000);
-      
-      setTimeout(() => {
-        addLogEntry('Weather risk increased – WARNING', 'warning');
-      }, 2000);
-      
-      setTimeout(() => {
-        addLogEntry('Rockfall detected by CNN & Image Model – DANGER', 'danger');
-      }, 3000);
+      push('Frontend event trigger button clicked.', 'info');
     }
   }, [triggerAlert]);
 
-  const getLogEntryClass = (level: string) => {
-    switch (level) {
-      case 'info':
-        return 'text-blue-600';
-      case 'warning':
-        return 'text-orange-600';
-      case 'danger':
-        return 'text-red-600';
-      default:
-        return 'text-gray-600';
-    }
-  };
-
   return (
     <div className="bg-white p-4 rounded-lg shadow h-full">
-      <h3 className="text-lg font-semibold mb-4">Event Log</h3>
-      
-      <div className="h-64 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-        {logs.map((log, index) => (
-          <div key={index} className={`mb-1 ${getLogEntryClass(log.level)}`}>
-            <span className="font-mono">{log.timestamp}</span> {log.message}
+      <h3 className="text-lg font-semibold mb-4 text-gray-800">Event Log</h3>
+      <div className="h-96 overflow-y-auto border border-gray-200 rounded p-3 bg-gray-50 font-mono text-sm">
+        {logs.map((l, idx) => (
+          <div key={idx} className={`mb-1 flex`}>
+            <span className="text-gray-400 mr-3">[{formatTS(l.timestamp)}]</span>
+            <span className={`${l.level === 'danger' ? 'text-red-600 font-bold' : l.level === 'warning' ? 'text-orange-500' : 'text-blue-700'}`}>
+              {l.message.replace(/\[.*?\]\s/, '')}
+            </span>
           </div>
         ))}
-        
         {logs.length === 0 && (
           <div className="text-gray-400 italic">No events recorded yet...</div>
         )}

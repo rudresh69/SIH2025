@@ -1,52 +1,21 @@
-import React, { useState, useEffect, useMemo } from 'react';
+// frontend/src/components/ImageModel.tsx
+import React from "react";
+// Removed useWebSocket hook as we won't be using live data for now
 
 interface ImageModelProps {
+  // triggerAlert prop is no longer strictly necessary for "under development" but can remain if you want to reuse it later
   triggerAlert?: boolean;
 }
 
-const ImageModel: React.FC<ImageModelProps> = ({ triggerAlert = false }) => {
-  const [status, setStatus] = useState<'safe' | 'warning' | 'danger'>('safe');
-  const [imageIndex, setImageIndex] = useState(0);
-  
-  // Mock images for demonstration
-  const images = useMemo(() => [
-    { url: 'https://via.placeholder.com/400x300/e0f7fa/000000?text=Safe+Rock+Formation', status: 'safe' },
-    { url: 'https://via.placeholder.com/400x300/fff9c4/000000?text=Possible+Crack+Detected', status: 'warning' },
-    { url: 'https://via.placeholder.com/400x300/ffebee/000000?text=Rockfall+Detected', status: 'danger' }
-  ], []);
-
-  useEffect(() => {
-    // Cycle through images every 5 seconds for demo purposes
-    const interval = setInterval(() => {
-      if (!triggerAlert) {
-        const nextIndex = (imageIndex + 1) % 2; // Only cycle between safe and warning in normal mode
-        setImageIndex(nextIndex);
-        setStatus(images[nextIndex].status as 'safe' | 'warning' | 'danger');
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [imageIndex, triggerAlert, images]);
-
-  useEffect(() => {
-    // When alert is triggered, show the danger image
-    if (triggerAlert) {
-      setImageIndex(2); // Index of danger image
-      setStatus('danger');
-    }
-  }, [triggerAlert]);
+const ImageModel: React.FC<ImageModelProps> = () => { // Removed triggerAlert from destructuring as it's not used
+  // No need for state or effects to manage status/images if it's "under development"
 
   const getStatusDisplay = () => {
-    switch (status) {
-      case 'safe':
-        return <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full">Safe ✅</span>;
-      case 'warning':
-        return <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full">Possible Crack ⚠️</span>;
-      case 'danger':
-        return <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full">Rockfall 🔴</span>;
-      default:
-        return null;
-    }
+    return (
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+        ⚪ Under Development
+      </span>
+    );
   };
 
   return (
@@ -55,15 +24,19 @@ const ImageModel: React.FC<ImageModelProps> = ({ triggerAlert = false }) => {
         <h3 className="text-lg font-semibold">Image Model</h3>
         {getStatusDisplay()}
       </div>
-      
+
       <div className="relative">
-        <img 
-          src={images[imageIndex].url} 
-          alt="Rock formation" 
-          className="w-full h-64 object-cover rounded-md"
+        {/* Placeholder image for under development */}
+        <img
+          src="/images/placeholder-dev.jpg" // You might need to create a placeholder image, e.g., in public/images
+          alt="Image Model Under Development"
+          className="w-full h-64 object-cover rounded-md bg-gray-200 flex items-center justify-center text-gray-500"
         />
-        <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2 text-sm">
-          Camera Feed - Under Development
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 text-white text-xl font-bold rounded-md">
+          Image Model Under Development
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2 text-sm text-center">
+          Live Feed (Currently Offline)
         </div>
       </div>
     </div>

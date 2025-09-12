@@ -1,77 +1,90 @@
-import React, { useState } from 'react';
-import './App.css';
+// frontend/src/App.tsx
+import React, { useState } from "react";
+import "./App.css";
 
 // Import components
-import Header from './components/Header';
-import SensorGraphs from './components/SensorGraphs';
-import WeatherWidget from './components/WeatherWidget';
-import ImageModel from './components/ImageModel';
-import ModelPredictions from './components/ModelPredictions';
-import RiskIndicator from './components/RiskIndicator';
-import EventLog from './components/EventLog';
-import Footer from './components/Footer';
-import AlertButton from './components/AlertButton';
-import BlogSection from './components/BlogSection';
+import Header from "./components/Header";
+import SensorGraphs from "./components/SensorGraphs";
+import WeatherForecast from "./components/WeatherForecast";
+import AlertPanel from "./components/AlertPanel";
+import ImageModel from "./components/ImageModel";
+import ModelPredictions from "./components/ModelPredictions";
+import RiskIndicator from "./components/RiskIndicator";
+import EventLog from "./components/EventLog";
+import Footer from "./components/Footer";
+import AlertButton from "./components/AlertButton";
+// --- REMOVED: BlogSection import is gone ---
 
 function App() {
   const [alertActive, setAlertActive] = useState(false);
 
-  const handleTriggerAlert = () => {
+  // --- THIS IS THE UPDATED FUNCTION ---
+  const handleTriggerAlert = async (eventType: string) => {
+    // Prevent triggering a new event if one is already active
+    if (alertActive) return;
+
+    console.log(`Triggering ${eventType} event...`);
     setAlertActive(true);
-    
-    // Reset alert after 30 seconds for demo purposes
+
+    try {
+      // Send the request to your backend to start the simulation
+      const response = await fetch(`http://127.0.0.1:8000/api/trigger_event/${eventType}`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        console.error('Failed to trigger event on the backend.');
+      } else {
+        const result = await response.json();
+        console.log('Backend response:', result.message);
+      }
+    } catch (error) {
+      console.error('Error sending trigger request:', error);
+    }
+
+    // The frontend alert state will reset after 65 seconds
+    // (slightly longer than the 60s backend event)
     setTimeout(() => {
+      console.log("Resetting frontend alert state.");
       setAlertActive(false);
-    }, 30000);
+    }, 65000); // 65 seconds
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-100">
       <Header />
-      
+
       <main className="flex-grow p-4">
-        <div className="grid grid-cols-4 gap-4 mb-4">
-          <div className="col-span-3">
+        <AlertPanel />
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+          <div className="lg:col-span-3">
             <SensorGraphs />
           </div>
-          <div className="col-span-1">
-            <WeatherWidget />
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="col-span-2">
-            <ImageModel triggerAlert={alertActive} />
-          </div>
-          <div className="col-span-1">
-            <div className="bg-white p-4 rounded-lg shadow text-center">
-              <p className="text-sm text-gray-500 mb-2">Date & Time Log</p>
-              <p className="font-semibold">
-                {new Date().toLocaleDateString()} - Updated every 3 hours
-              </p>
-            </div>
+          <div className="lg:col-span-1">
+            <WeatherForecast />
           </div>
         </div>
         
         <ModelPredictions triggerAlert={alertActive} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          <ImageModel triggerAlert={alertActive} />
+          <RiskIndicator triggerAlert={alertActive} />
+        </div>
         
-        <div className="grid grid-cols-5 gap-4 mt-4">
-          <div className="col-span-2">
-            <RiskIndicator triggerAlert={alertActive} />
-          </div>
-          <div className="col-span-3">
+        <div className="mt-4">
             <EventLog triggerAlert={alertActive} />
-          </div>
         </div>
       </main>
-      
+
+      {/* This now correctly passes the new function to your AlertButton */}
       <AlertButton onTriggerAlert={handleTriggerAlert} isAlertActive={alertActive} />
       
-      <BlogSection />
-      
+      {/* --- REMOVED: BlogSection component is gone --- */}
       <Footer />
     </div>
   );
 }
 
-export default App;
+export default App; 
